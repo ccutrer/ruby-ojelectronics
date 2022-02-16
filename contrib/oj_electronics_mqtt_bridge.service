@@ -1,0 +1,11 @@
+[Unit]
+Description=OJ Electronics MQTT Bridge
+
+[Service]
+User=pi
+ExecStart=/usr/local/bin/oj_electronics_mqtt_bridge user@domain password mqtt://localhost/ --brand=oj_electronics
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target

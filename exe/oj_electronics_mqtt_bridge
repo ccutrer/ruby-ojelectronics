@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "ojelectronics"
+require "homie-mqtt"
+require "optparse"
+
+brand = nil
+
+options = OptionParser.new do |opts|
+  opts.banner = "Usage: oj_electronics_mqtt_bridge USERNAME PASSWORD MQTT_URI [options]"
+
+  opts.on("--brand=BRAND", "Provide the brand. Either oj_electronics or schluter") do |v|
+    brand = v.to_sym
+  end
+  opts.on("-h", "--help", "Prints this help") do
+    puts opts
+    exit
+  end
+end
+
+options.parse!
+
+unless ARGV.length == 3
+  puts options
+  exit 1
+end
+
+client = OJElectronics::Client.new(ARGV[0], ARGV[1], brand: brand)
+
+homie = MQTT::Homie::Device.new(MQTT::Homie.escape_id(brand&.to_s || "oj_electronics"),
+                                "OJ Electronics Thermostats",
+                                mqtt: ARGV[2])
+
+client.thermostats.each_value do |t|
+  homie.node(t.serial_number, t.room, "Thermostat") do |n|
+    n.property("temperature", "Current Temperature", :float, t.temperature, unit: "°C")
+    n.property("set-point-temperature", "Set Point Temperature", :float, t.set_point_temperature, unit: "°C") do |v|
+      t.set_point_temperature = v
+    end
+    n.property("online", "Online", :boolean, t.online)
+    n.property("heating", "Heating", :boolean, t.heating)
+    n.property("regulation-mode", "Regulation Mode", :enum, t.regulation_mode,
+               format: OJElectronics::Thermostat::REGULATION_MODES)
+  end
+end
+homie.publish
+
+PROPERTIES = %i[temperature set_point_temperature online heating regulation_mode].freeze
+
+loop do
+  t = client.long_poll
+  next unless t
+
+  homie.mqtt.batch_publish do
+    n = homie[t.serial_number]
+    PROPERTIES.each do |prop|
+      n[prop.to_s.tr("_", "-")].value = t.send(prop)
+    end
+  end
+end
