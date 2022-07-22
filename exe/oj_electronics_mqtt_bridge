@@ -35,7 +35,12 @@ homie = MQTT::Homie::Device.new(MQTT::Homie.escape_id(brand&.to_s || "oj_electro
 client.thermostats.each_value do |t|
   homie.node(t.serial_number, t.room, "Thermostat") do |n|
     n.property("temperature", "Current Temperature", :float, t.temperature, unit: "°C")
-    n.property("set-point-temperature", "Set Point Temperature", :float, t.set_point_temperature, unit: "°C") do |v|
+    n.property("set-point-temperature",
+               "Set Point Temperature",
+               :float,
+               t.set_point_temperature,
+               unit: "°C",
+               format: 5..40) do |v|
       t.set_point_temperature = v
     end
     n.property("online", "Online", :boolean, t.online)
